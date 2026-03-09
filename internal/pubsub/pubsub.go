@@ -129,3 +129,47 @@ func PublishGob[T any](ch *amqp.Channel, exchange, key string, val T) error {
 	}
 	return nil
 }
+
+func SubscribeGob[T any](conn *amqp.Connection, exchange, queueName, key string, queueType SimpleQueueType, handler func(T) AckType) error {
+	chanl, queue, err := DeclareAndBind(conn, exchange, queueName, key, queueType)
+	if err != nil {
+		return err
+	}
+
+	deliveries, err := chanl.Consume(queue.Name, "", false, false, false, false, nil)
+	if err != nil {
+		return err
+	}
+
+	go func() {
+		for delivery := range deliveries {
+			if delivery.ContentType != "application/gob" {
+				fmt.Println("Content type is not of type gob")
+				continue
+			}
+			var msg T
+			reader := bytes.NewReader(delivery.Body)
+			dec := gob.NewDecoder(reader)
+			err := dec.Decode(&msg)
+			if err != nil {
+				fmt.Printf("Error unmarshalling using Gob: %s\n", err)
+				continue
+			}
+			ackType := handler(msg)
+			switch ackType {
+			case Ack:
+				delivery.Ack(false)
+				fmt.Println("Message acknowledged (Ack)")
+			case NackRequeue:
+				delivery.Nack(false, true)
+				fmt.Println("Message failed, requeueing (NackRequeue)")
+			case NackDiscard:
+				delivery.Nack(false, false)
+				fmt.Println("Message failed, discarding (NackDiscard)")
+			}
+			// fmt.Print("> ")
+		}
+	}()
+
+	return nil
+}
