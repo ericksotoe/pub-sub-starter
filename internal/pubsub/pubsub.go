@@ -48,6 +48,8 @@ func SubscribeJSON[T any](conn *amqp.Connection, exchange, queueName, key string
 		return err
 	}
 
+	chanl.Qos(10, 0, false)
+
 	deliveries, err := chanl.Consume(queue.Name, "", false, false, false, false, nil)
 	if err != nil {
 		return err
@@ -135,6 +137,8 @@ func SubscribeGob[T any](conn *amqp.Connection, exchange, queueName, key string,
 	if err != nil {
 		return err
 	}
+
+	chanl.Qos(10, 0, false)
 
 	deliveries, err := chanl.Consume(queue.Name, "", false, false, false, false, nil)
 	if err != nil {
